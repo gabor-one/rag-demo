@@ -9,6 +9,7 @@ import os
 COLLECTION_NAME = "hybrid_search_collection"
 DB_FILE_PATH = "./data/unittest_milvus.db"
 
+
 # Function scope slows down the tests significantly
 #  but otherwise PyMilvus and Pytest will try to use different event loops
 @pytest_asyncio.fixture(scope="function")
@@ -17,7 +18,7 @@ async def milvusdb() -> AsyncGenerator[MilvusDB, None]:
 
     # if os.path.exists(DB_FILE_PATH):
     #     os.remove(DB_FILE_PATH)
-        
+
     # lockfile = f"{DB_FILE_PATH}.lock"
     # if os.path.exists(lockfile):
     #     os.remove(lockfile)
@@ -36,7 +37,7 @@ async def milvusdb() -> AsyncGenerator[MilvusDB, None]:
 @pytest.mark.asyncio
 async def test_insert_search(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
-        [CreateDocument(text="test doc", metadata={}), CreateDocument(text="another doc", metadata={})]
+        [CreateDocument(text="test doc"), CreateDocument(text="another doc")]
     )
     results = await milvusdb.hybrid_search("doc")
 
@@ -46,6 +47,46 @@ async def test_insert_search(milvusdb: MilvusDB):
         results[0]["entity"]["text"] == "another doc"
         and results[1]["entity"]["text"] == "test doc"
     )
+
+
+@pytest.mark.asyncio
+async def test_insert_with_metadata_search(milvusdb: MilvusDB):
+    await milvusdb.insert_documents(
+        [
+            CreateDocument(text="test doc", metadata={"group": "value"}),
+            CreateDocument(text="another doc", metadata={"group": "value2"}),
+        ]
+    )
+    results = await milvusdb.hybrid_search("doc")
+
+    assert len(results) == 2
+    assert all("text" in res["entity"] for res in results)
+    assert all("metadata" in res["entity"] for res in results)
+    assert (
+        results[0]["entity"]["text"] == "another doc"
+        and results[1]["entity"]["text"] == "test doc"
+    )
+    assert (
+        results[0]["entity"]["metadata"]["group"] == "value2"
+        and results[1]["entity"]["metadata"]["group"] == "value"
+    )
+
+
+@pytest.mark.asyncio
+async def test_insert_with_metadata_filter_search(milvusdb: MilvusDB):
+    await milvusdb.insert_documents(
+        [
+            CreateDocument(text="test doc", metadata={"group": "value"}),
+            CreateDocument(text="another doc", metadata={"group": "value2"}),
+        ]
+    )
+    results = await milvusdb.hybrid_search("doc", filter='metadata["group"] == "value"')
+
+    assert len(results) == 1
+    assert all("text" in res["entity"] for res in results)
+    assert all("metadata" in res["entity"] for res in results)
+    assert results[0]["entity"]["text"] == "test doc"
+    assert results[0]["entity"]["metadata"]["group"] == "value"
 
 
 @pytest.mark.asyncio

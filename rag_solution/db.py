@@ -113,6 +113,7 @@ class MilvusDB:
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
             # Set for all-mpnet-base-v2
             FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=768),
+            FieldSchema(name="metadata", dtype=DataType.JSON),
         ]
         schema = CollectionSchema(fields, enable_dynamic_field=True)
 
@@ -173,6 +174,7 @@ class MilvusDB:
         sparse_weight: float = 0.7,
         dense_weight: float = 1.0,
         similarity_threshold: float | None = 0.6,
+        filter: str | None = None,
         limit: int = 10,
     ) -> list[SearchResult]:
         assert self.async_client is not None, "DB is not initialized."
@@ -187,12 +189,14 @@ class MilvusDB:
             anns_field="dense_vector",
             param={},
             limit=limit,
+            expr=filter,
         )
         sparse_req = AnnSearchRequest(
             data=[query],
             anns_field="sparse_vector",
             param={},
             limit=limit,
+            expr=filter,
         )
         ranker = WeightedRanker(sparse_weight, dense_weight)
         results = (
@@ -226,7 +230,7 @@ class MilvusDB:
             {
                 "text": document["text"],
                 "dense_vector": embedding,
-                #"metadata": document["metadata"] if "metadata" in document else {},
+                "metadata": document["metadata"] if "metadata" in document else {},
             }
             for (document, embedding) in encode_results
         ]
