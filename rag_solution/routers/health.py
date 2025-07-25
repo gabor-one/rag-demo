@@ -10,7 +10,7 @@ from rag_solution.models.health import HealthCheckResponse, StatusEnum
 router = APIRouter(tags=["Health"], include_in_schema=True)
 
 
-@router.get("/health", response_model=HealthCheckResponse, status_code=200)
+@router.get("/health", response_model=HealthCheckResponse, status_code=200, summary="Health check endpoint")
 async def health(response: Response, db: MilvusDB = Depends(get_db)):
     db_connection_ready = False
     try:

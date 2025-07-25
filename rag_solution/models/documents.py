@@ -19,15 +19,15 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="Query string for semantic search")
     limit: Optional[int] = Field(5, description="Number of top results to return")
     similarity_threshold: Optional[float] = Field(
-        None, description="Similarity threshold for results"
+        None, description="Similarity threshold for results", examples=[None]
     )
     # Putting this on API is generally not a good approach, we are exposing ourself to vulnerabilities in Milvus
     # In case of production grade system filtering would be more structured. 
     # e.g.: Expecting an array of (filter key, operator: enum, value) tuples.
-    filter_phase: Optional[str] = Field(
+    filter_phrase: Optional[str] = Field(
         None,
         description="Filter expression. Use it with 'metadata' field. More on it: https://milvus.io/docs/boolean.md",
-        examples=['metadata["group"] == "value"'],
+        examples=[None, 'metadata["group"] == "value"'],
     )
 
 

@@ -13,7 +13,11 @@ from rag_solution.models.documents import (
 router = APIRouter(tags=["Documents"])
 
 
-@router.post("/ingest", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/ingest",
+    status_code=status.HTTP_201_CREATED,
+    summary="Ingest documents into the vector database",
+)
 async def ingest_documents(
     request: DocumentsIngestRequest, db: MilvusDB = Depends(get_db)
 ):
@@ -21,13 +25,17 @@ async def ingest_documents(
     return
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    summary="Query documents from the vector database using semantic search",
+)
 async def query_documents(request: QueryRequest, db: MilvusDB = Depends(get_db)):
     results = await db.hybrid_search(
         request.query,
         similarity_threshold=request.similarity_threshold,
         limit=min(request.limit or 20, 20),
-        filter=request.filter_phase,
+        filter=request.filter_phrase,
     )
     # Return the text of the top results
     return QueryResponse(
@@ -35,7 +43,11 @@ async def query_documents(request: QueryRequest, db: MilvusDB = Depends(get_db))
     )
 
 
-@router.get("/documents", response_model=DocumentListResponse)
+@router.get(
+    "/documents",
+    response_model=DocumentListResponse,
+    summary="List all documents in the vector database",
+)
 async def list_documents(db: MilvusDB = Depends(get_db)):
     # Attempt to list documents if metadata is stored in Milvus
     docs = await db.list_all_documents()
@@ -52,7 +64,11 @@ async def list_documents(db: MilvusDB = Depends(get_db)):
     )
 
 
-@router.delete("/documents/{id}", response_model=DeleteDocumentResponse)
+@router.delete(
+    "/documents/{id}",
+    response_model=DeleteDocumentResponse,
+    summary="Delete a document from the vector database by ID",
+)
 async def delete_document(id: int, db: MilvusDB = Depends(get_db)):
     # Attempt to delete document by id if supported
     await db.delete_document_by_id([id])

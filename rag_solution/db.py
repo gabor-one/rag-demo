@@ -55,6 +55,7 @@ def init_worker():
         device="cpu",
     )
 
+
 # Global worker pool for parallel processing
 #  In case of GPUs: one worker per GPU
 #  This is needed otherwise requests would compete for GPUs/CPU (pass CUDA device address to init_worker)
@@ -70,7 +71,9 @@ class SingletonWorkerPool:
     @classmethod
     def executor_pool_size(cls) -> int:
         if cls._executor_pool_size is None:
-            cls._executor_pool_size = settings.MAX_EXECUTOR_POOL_SIZE or (multiprocessing.cpu_count() - 1)
+            cls._executor_pool_size = settings.MAX_EXECUTOR_POOL_SIZE or (
+                multiprocessing.cpu_count() - 1
+            )
         return cls._executor_pool_size
 
     @classmethod
@@ -79,18 +82,17 @@ class SingletonWorkerPool:
             with cls._lock:
                 if cls._pool is None:
                     cls._pool = concurrent.futures.ProcessPoolExecutor(
-                        max_workers=cls.executor_pool_size(),
-                        initializer=init_worker
+                        max_workers=cls.executor_pool_size(), initializer=init_worker
                     )
                     logger.info(
                         f"Initialized embedding worker pool with {cls.executor_pool_size()} workers."
                     )
         return cls._pool
-    
+
     @classmethod
     def is_initialized(cls) -> bool:
         return cls._pool is not None
-    
+
     @classmethod
     def shutdown(cls):
         if cls._pool is not None:
@@ -100,9 +102,20 @@ class SingletonWorkerPool:
                     cls._pool = None
                     logger.info("Shut down embedding worker pool.")
 
+
 def encode_dense(
     documents: list[CreateDocument], type: Literal["Document", "Query"]
 ) -> list[tuple[CreateDocument, list[float]]]:
+    """
+    Encodes a list of documents into dense vector embeddings.
+    Args:
+        documents (list[CreateDocument]): A list of documents to encode. Each document should have a "text" field.
+        type (Literal["Document", "Query"]): Specifies whether to encode as "Document" or "Query".
+    Returns:
+        list[tuple[CreateDocument, list[float]]]: A list of tuples, each containing the original document and its corresponding embedding vector.
+    Raises:
+        ValueError: If the type is not "Document" or "Query".
+    """
     global dense_embedding_function
     if type == "Document":
         embeddings = dense_embedding_function.encode_documents(
@@ -117,8 +130,41 @@ def encode_dense(
     return list(zip(documents, embeddings))
 
 
-# MilvusDB
 class MilvusDB:
+    """
+    Asynchronous client wrapper for managing a Milvus vector database.
+    This class provides high-performance async operations and a managed sync client pool for interacting with Milvus.
+    It supports collection creation, document insertion, hybrid search (dense + sparse), and collection management.
+    Args:
+        uri (str): The URI of the Milvus server.
+    Attributes:
+        uri (str): The URI of the Milvus server.
+        async_client (AsyncMilvusClient | None): The asynchronous Milvus client instance.
+    Methods:
+        connect():
+            Asynchronously connects to Milvus, initializes clients, and creates the collection if it does not exist.
+        disconnect():
+            Asynchronously disconnects from Milvus and closes clients.
+        create_collection():
+            Asynchronously creates a new collection with the required schema and indexes.
+        encode_dense_parallel_executor(documents, type):
+            Encodes documents or queries into dense embeddings in parallel using a singleton worker pool.
+        hybrid_search(query, sparse_weight=0.7, dense_weight=1.0, similarity_threshold=0.6, filter=None, limit=10):
+            Performs a hybrid search using both sparse and dense embeddings, returning ranked results.
+        insert_documents(documents):
+            Asynchronously inserts documents into the collection after encoding their dense embeddings.
+        delete_document_by_id(doc_ids):
+            Asynchronously deletes documents from the collection by their primary key IDs.
+        list_all_documents():
+            Asynchronously retrieves all documents from the collection.
+        drop_all_documents():
+            Drops the entire collection and recreates it.
+        is_connection_ready():
+            Checks if the collection exists and the connection is ready.
+    Raises:
+        ValueError: If attempting to create a collection that already exists or drop a non-existent collection.
+    """
+
     def __init__(self, uri: str):
         self.uri: str = uri
         self.async_client: AsyncMilvusClient | None = None
@@ -206,7 +252,9 @@ class MilvusDB:
         # Run encode_documents in parallel for each chunk
         encode_results = await asyncio.gather(
             *[
-                loop.run_in_executor(SingletonWorkerPool.get_pool(), encode_dense, chunk, type)
+                loop.run_in_executor(
+                    SingletonWorkerPool.get_pool(), encode_dense, chunk, type
+                )
                 for chunk in chunks
             ]
         )
@@ -224,7 +272,9 @@ class MilvusDB:
     ) -> list[SearchResult]:
         assert self.async_client is not None, "DB is not initialized."
 
-        encode_results = await self.encode_dense_parallel_executor([CreateDocument(text=query)], "Query")
+        encode_results = await self.encode_dense_parallel_executor(
+            [CreateDocument(text=query)], "Query"
+        )
         query_dense_embedding = list(encode_results)[0][
             1
         ]  # Get the first (and only) query embedding
@@ -296,7 +346,9 @@ class MilvusDB:
     async def delete_document_by_id(self, doc_ids: list[int]):
         assert self.async_client is not None, "DB is not initialized."
         await self.async_client.delete(COLLECTION_NAME, ids=doc_ids)
-        logger.info(f"Deleted documents with IDs {doc_ids} from collection {COLLECTION_NAME}.")
+        logger.info(
+            f"Deleted documents with IDs {doc_ids} from collection {COLLECTION_NAME}."
+        )
 
     async def list_all_documents(self) -> list[ResultDocument]:
         assert self.async_client is not None, "DB is not initialized."
@@ -327,12 +379,12 @@ class MilvusDB:
             await self.create_collection()
         else:
             raise ValueError("Collection does not exist.")
-        
+
     def is_connection_ready(self) -> bool:
         return utility.has_collection(COLLECTION_NAME)
 
 
-# Dependency injection for MilvusDB
+# Dependency inject Milvus endpoints
 async def get_db():
     db = MilvusDB(settings.MILVUS_URI)
     await db.connect()
