@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Response
-from fastapi.responses import JSONResponse
 from loguru import logger
 
 from rag_solution.db import MilvusDB, SingletonWorkerPool, get_db
