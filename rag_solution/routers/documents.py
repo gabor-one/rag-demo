@@ -1,8 +1,6 @@
-import datetime
+from fastapi import APIRouter, Depends, status
 
-from fastapi import APIRouter, Depends, HTTPException
-
-from rag_solution.db import MilvusDB
+from rag_solution.db import MilvusDB, get_db
 from rag_solution.models.documents import (
     DeleteDocumentResponse,
     Document,
@@ -11,26 +9,16 @@ from rag_solution.models.documents import (
     QueryRequest,
     QueryResponse,
 )
-from rag_solution.settings import settings
 
 router = APIRouter(tags=["Documents"])
 
 
-# Dependency injection for MilvusDB
-def get_db():
-    db = MilvusDB(settings.MILVUS_URI)
-    return db
-
-
-@router.post("/ingest", response_model=list[Document])
+@router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def ingest_documents(
     request: DocumentsIngestRequest, db: MilvusDB = Depends(get_db)
 ):
-    contents = [doc.text for doc in request.documents]
-    await db.insert_documents(contents)
-    now = datetime.datetime.utcnow().isoformat()
-    # Milvus does not return IDs directly; this is a placeholder
-    return [Document(id=fn, filename=fn, processed_at=now) for fn in filenames]
+    await db.insert_documents([doc.model_dump() for doc in request.documents])
+    return
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -38,7 +26,8 @@ async def query_documents(request: QueryRequest, db: MilvusDB = Depends(get_db))
     results = await db.hybrid_search(
         request.query,
         similarity_threshold=request.similarity_threshold,
-        limit=max(request.top_k or 20, 20),
+        limit=min(request.limit or 20, 20),
+        filter=request.filter_phase,
     )
     # Return the text of the top results
     return QueryResponse(
@@ -53,7 +42,10 @@ async def list_documents(db: MilvusDB = Depends(get_db)):
 
     return (
         DocumentListResponse(
-            documents=[Document(id=doc["pk"], text=doc["text"]) for doc in docs]
+            documents=[
+                Document(id=doc["pk"], text=doc["text"], metadata=doc["metadata"])
+                for doc in docs
+            ]
         )
         if docs
         else DocumentListResponse(documents=[])

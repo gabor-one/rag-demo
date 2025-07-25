@@ -1,7 +1,8 @@
 import asyncio
 import concurrent.futures
 from itertools import chain
-from typing import Iterable, Iterator, Literal, NamedTuple, TypedDict
+import threading
+from typing import Iterable, Literal, TypedDict
 import multiprocessing
 import concurrent
 from pymilvus import (
@@ -17,8 +18,10 @@ from pymilvus import (
     model,
     utility,
 )
+from loguru import logger
+from rag_solution.settings import settings
 
-# Contsants
+# Constants
 COLLECTION_NAME = "hybrid_search_collection"
 
 
@@ -52,6 +55,50 @@ def init_worker():
         device="cpu",
     )
 
+# Global worker pool for parallel processing
+#  In case of GPUs: one worker per GPU
+#  This is needed otherwise requests would compete for GPUs/CPU (pass CUDA device address to init_worker)
+#  This essentially creates a queue for embedding requests while keeping necessary resources initialized.
+class SingletonWorkerPool:
+    _lock = threading.Lock()
+    _pool: concurrent.futures.ProcessPoolExecutor | None = None
+
+    # Limit max executor to 4 as dense embedding function model is fairly large
+    # all-mpnet-base-v2: 420 MB
+    _executor_pool_size: int | None = None
+
+    @classmethod
+    def executor_pool_size(cls) -> int:
+        if cls._executor_pool_size is None:
+            cls._executor_pool_size = settings.MAX_EXECUTOR_POOL_SIZE or (multiprocessing.cpu_count() - 1)
+        return cls._executor_pool_size
+
+    @classmethod
+    def get_pool(cls) -> concurrent.futures.ProcessPoolExecutor:
+        if cls._pool is None:
+            with cls._lock:
+                if cls._pool is None:
+                    cls._pool = concurrent.futures.ProcessPoolExecutor(
+                        max_workers=cls.executor_pool_size(),
+                        initializer=init_worker
+                    )
+                    logger.info(
+                        f"Initialized embedding worker pool with {cls.executor_pool_size()} workers."
+                    )
+        return cls._pool
+    
+    @classmethod
+    def is_initialized(cls) -> bool:
+        return cls._pool is not None
+    
+    @classmethod
+    def shutdown(cls):
+        if cls._pool is not None:
+            with cls._lock:
+                if cls._pool is not None:
+                    cls._pool.shutdown(wait=True, cancel_futures=True)
+                    cls._pool = None
+                    logger.info("Shut down embedding worker pool.")
 
 def encode_dense(
     documents: list[CreateDocument], type: Literal["Document", "Query"]
@@ -76,13 +123,6 @@ class MilvusDB:
         self.uri: str = uri
         self.async_client: AsyncMilvusClient | None = None
 
-        # Limit max executor to 4 as dense embedding function model is large
-        # all-mpnet-base-v2: 420 MB
-        self.executor_pool_size = min(multiprocessing.cpu_count() - 1, 4)
-        self.executor = concurrent.futures.ProcessPoolExecutor(
-            max_workers=self.executor_pool_size, initializer=init_worker
-        )
-
     async def connect(self):
         # High Performance Astnc client
         self.async_client = AsyncMilvusClient(
@@ -97,9 +137,12 @@ class MilvusDB:
         if not utility.has_collection(COLLECTION_NAME):
             await self.create_collection()
 
+        logger.info(f"Connected to Milvus at {self.uri}")
+
     async def disconnect(self):
         await self.async_client.close()
         connections.disconnect("default")
+        logger.info(f"Disconnected from Milvus at {self.uri}")
 
     async def create_collection(self):
         if utility.has_collection(COLLECTION_NAME):
@@ -146,6 +189,7 @@ class MilvusDB:
         )
 
         await self.async_client.load_collection(COLLECTION_NAME)
+        logger.info(f"Created collection {COLLECTION_NAME} with schema: {schema}")
 
     async def encode_dense_parallel_executor(
         self, documents: list[CreateDocument], type: Literal["Document", "Query"]
@@ -154,14 +198,15 @@ class MilvusDB:
 
         # Split documents into self.executor_pool_size chunks for parallel processing
         chunks = [
-            documents[i :: self.executor_pool_size]
-            for i in range(self.executor_pool_size)
+            documents[i :: SingletonWorkerPool.executor_pool_size()]
+            for i in range(SingletonWorkerPool.executor_pool_size())
         ]
+        chunks = [chunk for chunk in chunks if chunk]  # Remove empty chunks
 
         # Run encode_documents in parallel for each chunk
         encode_results = await asyncio.gather(
             *[
-                loop.run_in_executor(self.executor, encode_dense, chunk, type)
+                loop.run_in_executor(SingletonWorkerPool.get_pool(), encode_dense, chunk, type)
                 for chunk in chunks
             ]
         )
@@ -209,6 +254,10 @@ class MilvusDB:
             )
         )[0]
 
+        logger.info(
+            f"Hybrid search for query '{query}' returned {len(results)} results."
+        )
+
         if similarity_threshold is not None:
             # Filter results based on the similarity threshold
             results = [
@@ -216,6 +265,10 @@ class MilvusDB:
                 for result in results
                 if result["distance"] >= similarity_threshold
             ]
+
+            logger.info(
+                f"Filtered results to {len(results)} based on similarity threshold {similarity_threshold}."
+            )
 
         return results
 
@@ -236,10 +289,14 @@ class MilvusDB:
         ]
 
         await self.async_client.insert(COLLECTION_NAME, document_dense_embeddings)
+        logger.info(
+            f"Inserted {len(document_dense_embeddings)} documents into collection {COLLECTION_NAME}."
+        )
 
     async def delete_document_by_id(self, doc_ids: list[int]):
         assert self.async_client is not None, "DB is not initialized."
         await self.async_client.delete(COLLECTION_NAME, ids=doc_ids)
+        logger.info(f"Deleted documents with IDs {doc_ids} from collection {COLLECTION_NAME}.")
 
     async def list_all_documents(self) -> list[ResultDocument]:
         assert self.async_client is not None, "DB is not initialized."
@@ -251,7 +308,7 @@ class MilvusDB:
                 COLLECTION_NAME,
                 offset=offset,
                 limit=limit,
-                output_fields=["text"],
+                output_fields=["text", "metadata"],
             )
 
             if not res:
@@ -270,3 +327,13 @@ class MilvusDB:
             await self.create_collection()
         else:
             raise ValueError("Collection does not exist.")
+        
+    def is_connection_ready(self) -> bool:
+        return utility.has_collection(COLLECTION_NAME)
+
+
+# Dependency injection for MilvusDB
+async def get_db():
+    db = MilvusDB(settings.MILVUS_URI)
+    await db.connect()
+    return db

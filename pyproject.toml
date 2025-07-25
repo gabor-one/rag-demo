@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.116.1",
+    "loguru>=0.7.3",
     "pydantic-settings>=2.10.1",
     "pymilvus[model]>=2.5.14",
     "sentence-transformers>=5.0.0",
