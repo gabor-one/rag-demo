@@ -39,7 +39,7 @@ async def query_documents(request: QueryRequest, db: MilvusDB = Depends(get_db))
     )
     # Return the text of the top results
     return QueryResponse(
-        results=[Document(id=hit["id"], text=hit["entity"]["text"]) for hit in results]
+        results=[Document(id=hit["pk"], text=hit["entity"]["text"]) for hit in results]
     )
 
 

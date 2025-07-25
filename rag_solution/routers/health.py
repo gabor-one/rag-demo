@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Response
 from loguru import logger
 
-from rag_solution.db import MilvusDB, SingletonWorkerPool, get_db
+from rag_solution.db import MilvusDB, get_db
 from rag_solution.models.health import HealthCheckResponse, StatusEnum
+from rag_solution.singleton_worker_pool import SingletonWorkerPool
 
-# Normally i'd hide this
-#  For the sake of this excersie it show.
+
 router = APIRouter(tags=["Health"], include_in_schema=True)
 
 

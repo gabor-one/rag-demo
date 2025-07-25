@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from rag_solution.db import SingletonWorkerPool
+from rag_solution.singleton_worker_pool import SingletonWorkerPool
 from .routers.health import router as health_router
 from .routers.documents import router as documents_router
 

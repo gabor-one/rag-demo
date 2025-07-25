@@ -6,12 +6,14 @@ import pytest_asyncio
 from rag_solution.db import CreateDocument, MilvusDB
 import os
 
+from rag_solution.singleton_worker_pool import SingletonWorkerPool
+
 COLLECTION_NAME = "hybrid_search_collection"
 DB_FILE_PATH = "./data/unittest_milvus.db"
-
+ASYNCIO_SCOPE = "module"
 
 # Single fixture for the session in session scope
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
+@pytest_asyncio.fixture(scope="module", loop_scope=ASYNCIO_SCOPE)
 async def milvusdb() -> AsyncGenerator[MilvusDB, None]:
     """Fixture to create a MilvusDB instance for testing."""
 
@@ -24,21 +26,23 @@ async def milvusdb() -> AsyncGenerator[MilvusDB, None]:
 
     os.makedirs(os.path.dirname(DB_FILE_PATH), exist_ok=True)
 
+    SingletonWorkerPool.get_pool()
     db = MilvusDB(uri=DB_FILE_PATH)
     await db.connect()
 
     yield db
 
     await db.disconnect()
+    SingletonWorkerPool.shutdown()
 
 # Clean up the database file before each test, operate is session scope
-@pytest_asyncio.fixture(scope="function", loop_scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="function", loop_scope=ASYNCIO_SCOPE, autouse=True)
 async def clean_db(milvusdb: MilvusDB):
     """Fixture to clean up the database after tests."""
     # Clean up the collection after tests
     await milvusdb.drop_all_documents()
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_insert_search(milvusdb: MilvusDB, clean_db):
     await milvusdb.insert_documents(
         [CreateDocument(text="test doc"), CreateDocument(text="another doc")]
@@ -53,7 +57,7 @@ async def test_insert_search(milvusdb: MilvusDB, clean_db):
     )
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_insert_with_metadata_search(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
         [
@@ -76,7 +80,7 @@ async def test_insert_with_metadata_search(milvusdb: MilvusDB):
     )
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_insert_with_metadata_filter_search(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
         [
@@ -93,7 +97,7 @@ async def test_insert_with_metadata_filter_search(milvusdb: MilvusDB):
     assert results[0]["entity"]["metadata"]["group"] == "value"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_sparse_embedding_only(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
         [CreateDocument(text="sparse test"), CreateDocument(text="irrelevant")]
@@ -107,7 +111,7 @@ async def test_sparse_embedding_only(milvusdb: MilvusDB):
     assert results[0]["entity"]["text"] == "sparse test"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_dense_embedding_only(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
         [CreateDocument(text="Iphone 16 pro"), CreateDocument(text="Toyota Corolla")]
@@ -121,7 +125,7 @@ async def test_dense_embedding_only(milvusdb: MilvusDB):
     assert results[0]["entity"]["text"] == "Iphone 16 pro"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_dense_similarity_threshold(milvusdb: MilvusDB):
     await milvusdb.insert_documents(
         [CreateDocument(text="Iphone 16 pro"), CreateDocument(text="Toyota Corolla")]
@@ -136,7 +140,7 @@ async def test_dense_similarity_threshold(milvusdb: MilvusDB):
     assert results[0]["entity"]["text"] == "Iphone 16 pro"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_parallel_insert_many_documents(milvusdb: MilvusDB):
     # Insert a large number of documents in parallel
     num_docs = 100
@@ -150,7 +154,7 @@ async def test_parallel_insert_many_documents(milvusdb: MilvusDB):
         assert f"Document {i}" in texts
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_delete_document_by_id(milvusdb: MilvusDB):
     # Insert documents
     await milvusdb.insert_documents(
@@ -173,7 +177,7 @@ async def test_delete_document_by_id(milvusdb: MilvusDB):
     assert len(remaining_docs) == 1
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_list_all_documents(milvusdb: MilvusDB):
     docs = [
         CreateDocument(text="doc1"),
@@ -188,7 +192,7 @@ async def test_list_all_documents(milvusdb: MilvusDB):
     assert len(all_docs) == len(docs)
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_insert_and_list_many_documents(milvusdb: MilvusDB):
     # Insert 1015 documents
     num_docs = 1015
@@ -202,7 +206,7 @@ async def test_insert_and_list_many_documents(milvusdb: MilvusDB):
         assert f"Bulk Document {i}" in texts
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
 async def test_drop_all_documents(milvusdb: MilvusDB):
     # Insert several documents
     docs = [

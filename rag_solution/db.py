@@ -1,11 +1,3 @@
-import asyncio
-import concurrent
-import concurrent.futures
-import multiprocessing
-import threading
-from itertools import chain
-from typing import Iterable, Literal, TypedDict
-
 from loguru import logger
 from pymilvus import (
     AnnSearchRequest,
@@ -17,118 +9,14 @@ from pymilvus import (
     FunctionType,
     MilvusException,
     WeightedRanker,
-    model,
 )
 
+from rag_solution.models.db import CreateDocument, ResultDocument, SearchResult
 from rag_solution.settings import settings
+from rag_solution.singleton_worker_pool import encode_dense_parallel_executor
 
 # Constants
 COLLECTION_NAME = "hybrid_search_collection"
-
-
-# Models
-class CreateDocument(TypedDict):
-    text: str
-    metadata: dict[str, str] | None
-
-
-class ResultDocument(TypedDict):
-    text: str
-    metadata: dict[str, str] | None
-    pk: int
-
-
-class SearchResult(TypedDict):
-    id: int
-    distance: float
-    entity: ResultDocument
-
-
-# Embedding functions
-dense_embedding_function: model.dense.SentenceTransformerEmbeddingFunction | None = None
-
-
-def init_worker():
-    global dense_embedding_function
-    dense_embedding_function = model.dense.SentenceTransformerEmbeddingFunction(
-        model_name="all-mpnet-base-v2",  # Good model with large context window
-        # Uses most performant device available if None
-        device="cpu",
-    )
-
-
-# Global worker pool for parallel processing
-#  In case of GPUs: one worker per GPU
-#  This is needed otherwise requests would compete for GPUs/CPU (pass CUDA device address to init_worker)
-#  This essentially creates a queue for embedding requests while keeping necessary resources initialized.
-class SingletonWorkerPool:
-    _lock = threading.Lock()
-    _pool: concurrent.futures.ProcessPoolExecutor | None = None
-
-    # Limit max executor to 4 as dense embedding function model is fairly large
-    # all-mpnet-base-v2: 420 MB
-    _executor_pool_size: int | None = None
-
-    @classmethod
-    def executor_pool_size(cls) -> int:
-        if cls._executor_pool_size is None:
-            cls._executor_pool_size = settings.MAX_EXECUTOR_POOL_SIZE or (
-                multiprocessing.cpu_count() - 1
-            )
-        return cls._executor_pool_size
-
-    @classmethod
-    def get_pool(cls) -> concurrent.futures.ProcessPoolExecutor:
-        if cls._pool is None:
-            with cls._lock:
-                if cls._pool is None:
-                    cls._pool = concurrent.futures.ProcessPoolExecutor(
-                        max_workers=cls.executor_pool_size(), initializer=init_worker
-                    )
-                    logger.info(
-                        f"Initialized embedding worker pool with {cls.executor_pool_size()} workers."
-                    )
-        return cls._pool
-
-    @classmethod
-    def is_initialized(cls) -> bool:
-        return cls._pool is not None
-
-    @classmethod
-    def shutdown(cls):
-        if cls._pool is not None:
-            with cls._lock:
-                if cls._pool is not None:
-                    cls._pool.shutdown(wait=True, cancel_futures=True)
-                    cls._pool = None
-                    logger.info("Shut down embedding worker pool.")
-
-
-def encode_dense(
-    documents: list[CreateDocument], type: Literal["Document", "Query"]
-) -> list[tuple[CreateDocument, list[float]]]:
-    """
-    Encodes a list of documents into dense vector embeddings.
-    Args:
-        documents (list[CreateDocument]): A list of documents to encode. Each document should have a "text" field.
-        type (Literal["Document", "Query"]): Specifies whether to encode as "Document" or "Query".
-    Returns:
-        list[tuple[CreateDocument, list[float]]]: A list of tuples, each containing the original document and its corresponding embedding vector.
-    Raises:
-        ValueError: If the type is not "Document" or "Query".
-    """
-    global dense_embedding_function
-    if type == "Document":
-        embeddings = dense_embedding_function.encode_documents(
-            [doc["text"] for doc in documents]
-        )
-    elif type == "Query":
-        embeddings = dense_embedding_function.encode_queries(
-            [doc["text"] for doc in documents]
-        )
-    else:
-        raise ValueError("Type must be either 'Document' or 'Query'.")
-    return list(zip(documents, embeddings))
 
 
 class MilvusDB:
@@ -148,8 +36,6 @@ class MilvusDB:
             Asynchronously disconnects from Milvus and closes clients.
         create_collection():
             Asynchronously creates a new collection with the required schema and indexes.
-        encode_dense_parallel_executor(documents, type):
-            Encodes documents or queries into dense embeddings in parallel using a singleton worker pool.
         hybrid_search(query, sparse_weight=0.7, dense_weight=1.0, similarity_threshold=0.6, filter=None, limit=10):
             Performs a hybrid search using both sparse and dense embeddings, returning ranked results.
         insert_documents(documents):
@@ -209,7 +95,7 @@ class MilvusDB:
             # Use auto generated id as primary key
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
             # Set for all-mpnet-base-v2
-            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=384),
+            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=384, enable_analyzer=True),
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
             # Set for all-mpnet-base-v2
             FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=768),
@@ -226,10 +112,6 @@ class MilvusDB:
         )
         schema.add_function(bm25_function)
 
-        await self.async_client.create_collection(
-            COLLECTION_NAME, schema=schema, consistency_level="Strong"
-        )
-
         index_params = self.async_client.prepare_index_params()
         index_params.add_index(
             field_name="sparse_vector",
@@ -240,37 +122,13 @@ class MilvusDB:
         index_params.add_index(
             field_name="dense_vector", index_type="FLAT", metric_type="COSINE"
         )
-        await self.async_client.create_index(
-            COLLECTION_NAME,
-            index_params,
+
+        await self.async_client.create_collection(
+            COLLECTION_NAME, schema=schema, consistency_level="Strong", index_params=index_params
         )
 
         await self.async_client.load_collection(COLLECTION_NAME)
         logger.info(f"Created collection {COLLECTION_NAME} with schema: {schema}")
-
-    async def encode_dense_parallel_executor(
-        self, documents: list[CreateDocument], type: Literal["Document", "Query"]
-    ) -> Iterable[tuple[CreateDocument, list[float]]]:
-        loop = asyncio.get_running_loop()
-
-        # Split documents into self.executor_pool_size chunks for parallel processing
-        chunks = [
-            documents[i :: SingletonWorkerPool.executor_pool_size()]
-            for i in range(SingletonWorkerPool.executor_pool_size())
-        ]
-        chunks = [chunk for chunk in chunks if chunk]  # Remove empty chunks
-
-        # Run encode_documents in parallel for each chunk
-        encode_results = await asyncio.gather(
-            *[
-                loop.run_in_executor(
-                    SingletonWorkerPool.get_pool(), encode_dense, chunk, type
-                )
-                for chunk in chunks
-            ]
-        )
-        # Flatten the list of lists and return as an iterator
-        return chain.from_iterable(encode_results)
 
     async def hybrid_search(
         self,
@@ -283,8 +141,8 @@ class MilvusDB:
     ) -> list[SearchResult]:
         assert self.async_client is not None, "DB is not initialized."
 
-        encode_results = await self.encode_dense_parallel_executor(
-            [CreateDocument(text=query)], "Query"
+        encode_results = await encode_dense_parallel_executor(
+            documents=[CreateDocument(text=query)], type="Query"
         )
         query_dense_embedding = list(encode_results)[0][
             1
@@ -336,8 +194,8 @@ class MilvusDB:
     async def insert_documents(self, documents: list[CreateDocument]):
         assert self.async_client is not None, "DB is not initialized."
 
-        encode_results = await self.encode_dense_parallel_executor(
-            documents, "Document"
+        encode_results = await encode_dense_parallel_executor(
+            documents=documents, type="Document"
         )
 
         document_dense_embeddings = [
