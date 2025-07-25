@@ -1,10 +1,12 @@
 import asyncio
-import concurrent.futures
-from itertools import chain
-import threading
-from typing import Iterable, Literal, TypedDict
-import multiprocessing
 import concurrent
+import concurrent.futures
+import multiprocessing
+import threading
+from itertools import chain
+from typing import Iterable, Literal, TypedDict
+
+from loguru import logger
 from pymilvus import (
     AnnSearchRequest,
     AsyncMilvusClient,
@@ -13,12 +15,11 @@ from pymilvus import (
     FieldSchema,
     Function,
     FunctionType,
+    MilvusException,
     WeightedRanker,
-    connections,
     model,
-    utility,
 )
-from loguru import logger
+
 from rag_solution.settings import settings
 
 # Constants
@@ -170,28 +171,38 @@ class MilvusDB:
         self.async_client: AsyncMilvusClient | None = None
 
     async def connect(self):
-        # High Performance Astnc client
         self.async_client = AsyncMilvusClient(
             uri=self.uri,
         )
-        # Low performance High comfort managed sync client pool
-        connections.connect(
-            alias="default",
-            uri=self.uri,
-        )
 
-        if not utility.has_collection(COLLECTION_NAME):
+        if not await self.try_load_collection():
             await self.create_collection()
 
         logger.info(f"Connected to Milvus at {self.uri}")
 
+    async def try_load_collection(self) -> bool:
+        """
+        Check if the collection exists in the Milvus database, load it if it does.
+        Returns:
+            bool: True if the collection exists and loaded, False otherwise.
+        """
+        try:
+            await self.async_client.load_collection(COLLECTION_NAME)
+            return True
+        except MilvusException as e:
+            if e.code == 100:
+                "collection not found error. It is ok."
+                pass
+            else:
+                logger.exception(f"Failed to load collection {COLLECTION_NAME}")
+        return False
+
     async def disconnect(self):
         await self.async_client.close()
-        connections.disconnect("default")
         logger.info(f"Disconnected from Milvus at {self.uri}")
 
     async def create_collection(self):
-        if utility.has_collection(COLLECTION_NAME):
+        if await self.try_load_collection():
             raise ValueError("Collection already exists.")
 
         fields = [
@@ -374,14 +385,14 @@ class MilvusDB:
 
     async def drop_all_documents(self):
         assert self.async_client is not None, "DB is not initialized."
-        if utility.has_collection(COLLECTION_NAME):
+        if await self.try_load_collection():
             await self.async_client.drop_collection(COLLECTION_NAME)
             await self.create_collection()
         else:
             raise ValueError("Collection does not exist.")
 
     def is_connection_ready(self) -> bool:
-        return utility.has_collection(COLLECTION_NAME)
+        return self.try_load_collection()
 
 
 # Dependency inject Milvus endpoints
