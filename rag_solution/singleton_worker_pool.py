@@ -7,13 +7,13 @@ from itertools import chain
 from typing import Iterable, Literal
 
 from loguru import logger
-from pymilvus import model
+from pymilvus.model.dense import SentenceTransformerEmbeddingFunction
 
 from rag_solution.models.db import CreateDocument
 from rag_solution.settings import settings
 
 # Embedding functions
-dense_embedding_function: model.dense.SentenceTransformerEmbeddingFunction | None = None
+dense_embedding_function: SentenceTransformerEmbeddingFunction | None = None
 
 def _encode_dense(
     documents: list[CreateDocument], type: Literal["Document", "Query"]
@@ -84,10 +84,12 @@ def _init_worker():
     Expected to be called by the worker processes.
     """
     global dense_embedding_function
-    dense_embedding_function = model.dense.SentenceTransformerEmbeddingFunction(
+    dense_embedding_function = SentenceTransformerEmbeddingFunction(
         model_name="all-mpnet-base-v2",  # Good model with large context window
         # Uses most performant device available if None
         device="cpu",
+        local_files_only=settings.SENTENCE_TRANSFORMER_LOCAL_FILES_ONLY,
+        cache_folder=settings.SENTENCE_TRANSFORMER_CACHE_DIR,
     )
 
 
@@ -139,3 +141,14 @@ class SingletonWorkerPool:
                     cls._pool.shutdown(wait=True, cancel_futures=True)
                     cls._pool = None
                     logger.info("Shut down embedding worker pool.")
+
+def test_sentence_transformer_model():
+    """
+    Fetches the Sentence Transformer model by running a dummy encoding task.
+    This is used to ensure the model is downloaded and ready for use.
+    This is used during docker build.
+    """
+    global dense_embedding_function
+    _init_worker()
+    dense_embedding_function.encode_queries(["dummy text"])  # Dummy call to ensure model is loaded
+    logger.info("Sentence Transformer model downloaded successfully.")

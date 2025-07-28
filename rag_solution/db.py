@@ -1,3 +1,5 @@
+import os
+
 from loguru import logger
 from pymilvus import (
     AnnSearchRequest,
@@ -57,6 +59,11 @@ class MilvusDB:
         self.async_client: AsyncMilvusClient | None = None
 
     async def connect(self):
+        logger.info(f"Connecting to Milvus at {self.uri}...")
+        # Create parent directories if using local milvus lite.
+        if self.uri.endswith(".db"):
+            os.makedirs(os.path.dirname(self.uri), exist_ok=True)
+
         self.async_client = AsyncMilvusClient(
             uri=self.uri,
         )
@@ -95,7 +102,12 @@ class MilvusDB:
             # Use auto generated id as primary key
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
             # Set for all-mpnet-base-v2
-            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=384, enable_analyzer=True),
+            FieldSchema(
+                name="text",
+                dtype=DataType.VARCHAR,
+                max_length=384,
+                enable_analyzer=True,
+            ),
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
             # Set for all-mpnet-base-v2
             FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=768),
@@ -124,7 +136,10 @@ class MilvusDB:
         )
 
         await self.async_client.create_collection(
-            COLLECTION_NAME, schema=schema, consistency_level="Strong", index_params=index_params
+            COLLECTION_NAME,
+            schema=schema,
+            consistency_level="Strong",
+            index_params=index_params
         )
 
         await self.async_client.load_collection(COLLECTION_NAME)
@@ -249,12 +264,12 @@ class MilvusDB:
         else:
             raise ValueError("Collection does not exist.")
 
-    def is_connection_ready(self) -> bool:
-        return self.try_load_collection()
+    async def is_connection_ready(self) -> bool:
+        return await self.try_load_collection()
 
 
 # Dependency inject Milvus endpoints
 async def get_db():
-    db = MilvusDB(settings.MILVUS_URI)
+    db = MilvusDB(settings.MILVUSDB_URI)
     await db.connect()
     return db

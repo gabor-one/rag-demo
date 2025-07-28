@@ -9,11 +9,11 @@ from rag_solution.singleton_worker_pool import SingletonWorkerPool
 router = APIRouter(tags=["Health"], include_in_schema=True)
 
 
-@router.get("/health", response_model=HealthCheckResponse, status_code=200, summary="Health check endpoint")
+@router.get("/healthz", response_model=HealthCheckResponse, status_code=200, summary="Health check endpoint")
 async def health(response: Response, db: MilvusDB = Depends(get_db)):
     db_connection_ready = False
     try:
-        db_connection_ready = db.is_connection_ready()
+        db_connection_ready = await db.is_connection_ready()
     except Exception:
         logger.exception("Health check failed")
 

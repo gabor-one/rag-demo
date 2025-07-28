@@ -1,4 +1,3 @@
-import os
 from typing import AsyncGenerator
 
 import pytest
@@ -23,7 +22,7 @@ async def milvusdb_container() -> AsyncGenerator[str, None]:
 @pytest_asyncio.fixture(scope="module", loop_scope=ASYNCIO_SCOPE)
 async def testclient(milvusdb_container: str) -> AsyncGenerator[AsyncClient, None]:
     # Use a local file for testing
-    settings.MILVUS_URI = milvusdb_container
+    settings.MILVUSDB_URI = milvusdb_container
 
     async with LifespanManager(app) as manager:
         async with AsyncClient(

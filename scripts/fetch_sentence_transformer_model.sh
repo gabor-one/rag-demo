@@ -1,0 +1,1 @@
+python "$(dirname "$0")/fetch_sentence_transformer_model.py"

@@ -1,0 +1,41 @@
+name: rag-demo
+
+services:
+  app:
+    image: rag-demo
+    build:
+      dockerfile: Dockerfile
+    environment:
+      MILVUSDB_URI: "http://milvus:19530"
+    depends_on:
+      - milvus
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  milvus:
+    image: milvusdb/milvus:v2.5.14
+    container_name: milvus
+    environment:
+      ETCD_USE_EMBED: true
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      COMMON_STORAGETYPE: local
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    command: ["milvus", "run", "standalone"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./data:/var/lib/milvus
+
+networks:
+  default:
+    name: milvus
