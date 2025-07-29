@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+from rag_solution.rate_limiter import setup_limiter
 from rag_solution.singleton_worker_pool import SingletonWorkerPool
 from .routers.health import router as health_router
 from .routers.documents import router as documents_router
@@ -11,7 +12,7 @@ from .routers.documents import router as documents_router
 async def lifespan(app: FastAPI):
     # Ensure worker pool is initialized
     # First call still be slower as initalizer runs on the first submit
-    SingletonWorkerPool.get_pool() 
+    SingletonWorkerPool.get_pool()
     yield
     SingletonWorkerPool.shutdown()
 
@@ -23,7 +24,7 @@ app = FastAPI(
     description="RAG Solution Homework for 21.co",
     lifespan=lifespan
 )
-
+setup_limiter(app)
 
 app.include_router(health_router)
 app.include_router(documents_router)
@@ -36,7 +37,11 @@ def dev():
 # Production server
 #   Use this for production deployments, e.g. with Docker or systemd
 #   It will not reload on code changes, which is more efficient for production use.
-#   This accepts all traffic
+#   This accepts all traffic.
+#   Gunicorn is recommended if vertical scaling is desired. Load bearing part is already scaling.
+#   My preffered way of scaling is horizontal scaling with multiple instances (e.g.: Kubernetes)...
+#     ... due to added extra functionalities: 
+#     zero-downtime updates (both app and platform), auto-scaling, use-what-you-need, etc.
 def serve():
     uvicorn.run("rag_solution.main:app", reload=False, host="0.0.0.0", log_level="info")
 

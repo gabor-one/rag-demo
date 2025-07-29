@@ -100,12 +100,15 @@ class MilvusDB:
 
         fields = [
             # Use auto generated id as primary key
+            # We could use externally supplied IDs if idempotency is required.
+            #   E.g.: (re-)ingesting changing documents like a Wiki.
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
             # Set for all-mpnet-base-v2
             FieldSchema(
                 name="text",
                 dtype=DataType.VARCHAR,
-                max_length=384,
+                # BERT based models have max length of 512
+                max_length=512,
                 enable_analyzer=True,
             ),
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
@@ -131,6 +134,9 @@ class MilvusDB:
             index_name="sparse_vector_index",
             metric_type="BM25",
         )
+
+        # Cosine dist: Normalized distance is a better choice
+        #   when we have functionalities like similarity threshold.
         index_params.add_index(
             field_name="dense_vector", index_type="FLAT", metric_type="COSINE"
         )
@@ -236,6 +242,8 @@ class MilvusDB:
 
     async def list_all_documents(self) -> list[ResultDocument]:
         assert self.async_client is not None, "DB is not initialized."
+        
+        # Let's page the results to avoid memory issues with large collections
         results: list[ResultDocument] = []
         offset = 0
         limit = 100

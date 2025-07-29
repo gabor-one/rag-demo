@@ -5,3 +5,5 @@ data
 notebooks
 tests
 .env
+raw_data
+data-ingestion

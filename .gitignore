@@ -12,3 +12,8 @@ wheels/
 # local data
 data
 notebooks
+
+raw_data
+extracted_files
+
+.DS_Store

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class DocumentIngest(BaseModel):
@@ -7,6 +8,13 @@ class DocumentIngest(BaseModel):
     metadata: Optional[dict[str, str]] = Field(
         {}, description="Optional metadata for the document"
     )
+
+    @field_validator("text")
+    @classmethod
+    def text_max_length(cls, v):
+        if len(v) > 512:
+            raise ValueError("text must be at most 512 characters long")
+        return v
 
 
 class DocumentsIngestRequest(BaseModel):
@@ -22,7 +30,7 @@ class QueryRequest(BaseModel):
         None, description="Similarity threshold for results", examples=[None]
     )
     # Putting this on API is generally not a good approach, we are exposing ourself to vulnerabilities in Milvus
-    # In case of production grade system filtering would be more structured. 
+    # In case of production grade system filtering would be more structured.
     # e.g.: Expecting an array of (filter key, operator: enum, value) tuples.
     filter_phrase: Optional[str] = Field(
         None,

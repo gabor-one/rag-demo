@@ -15,7 +15,7 @@ router = APIRouter(tags=["Documents"])
 
 @router.post(
     "/ingest",
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     summary="Ingest documents into the vector database",
 )
 async def ingest_documents(
@@ -39,7 +39,7 @@ async def query_documents(request: QueryRequest, db: MilvusDB = Depends(get_db))
     )
     # Return the text of the top results
     return QueryResponse(
-        results=[Document(id=hit["pk"], text=hit["entity"]["text"]) for hit in results]
+        results=[Document(id=hit["pk"], text=hit["entity"]["text"], metadata=hit["entity"]["metadata"]) for hit in results]
     )
 
 
@@ -70,6 +70,15 @@ async def list_documents(db: MilvusDB = Depends(get_db)):
     summary="Delete a document from the vector database by ID",
 )
 async def delete_document(id: int, db: MilvusDB = Depends(get_db)):
-    # Attempt to delete document by id if supported
+    # Attempt to delete document by id
     await db.delete_document_by_id([id])
     return DeleteDocumentResponse(id=id)
+
+
+@router.delete(
+    "/documents",
+    status_code=status.HTTP_200_OK,
+    summary="Delete all documents from the vector database",
+)
+async def delete_all_documents(db: MilvusDB = Depends(get_db)):
+    await db.drop_all_documents()
