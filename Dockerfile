@@ -30,6 +30,10 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 ENV SENTENCE_TRANSFORMER_CACHE_DIR="/app/models"
+
+# Defaults for UVICORN
+ENV UVICORN_HOST="0.0.0.0"
+ENV UVICORN_PORT="8000"
 # This should let the container run without external DB.
 # Podman uses networking on Mac to connect volumes which doens't work with MMAP.
 # Probably it would work on Linux (or with native containerziation in next MacOS).
@@ -56,4 +60,4 @@ USER app
 EXPOSE 8000
 
 # Run the FastAPI application by default
-CMD ["fastapi", "run", "--host", "0.0.0.0", "--port", "8000", "rag_solution/main.py"]
+CMD ["fastapi", "run", "rag_solution/main.py"]

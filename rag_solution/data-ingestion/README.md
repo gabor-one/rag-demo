@@ -20,7 +20,7 @@ A comprehensive Python script for ingesting PDF and text documents using docling
 
 ## System Dependencies
 
-- UV
+- UV: Python package and project manager. [Installation manual](https://docs.astral.sh/uv/getting-started/installation/).
 
 ## Installation
 

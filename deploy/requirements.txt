@@ -1,0 +1,5 @@
+# Use UV with pyproject.toml for dependency management
+#   Install dependecy group "iac": uv sync --group iac
+
+# pulumi>=3.0.0,<4.0.0
+# pulumi-gcp>=8.0.0,<9.0.0

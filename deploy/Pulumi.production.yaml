@@ -1,0 +1,4 @@
+config:
+  gcp:project: prod-project-id
+  gcp:region: europe-north2
+  rag-solution:milvus_uri: http://milvus-db.prod.cluster.uri:19530
