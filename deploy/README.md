@@ -33,7 +33,7 @@ pulumi preview
 * **Public Access**: Things like SSL termination with Load Balancer, SSL Certificate request and custom domain setup are not taken care of.
 * **Data Ingestion Pipeline Deployment**: Data ingestion container can be easily deployed with container runing service on a schedule. E.g.: Google Cloud Run, support scheduled execution.
 * **Alerting**: Monitoring is setup for VM and Container but alerting on metrics has not been covered, although it is essential part of operating a project.
-
+* **Prometheus Metrics collection and shipping to Google Cloud Metrics**: COS VM pre-installed Ops Agent can be configured to read and ship prometheus metrics from our application's health endpoint to Google Cloud Metrics. This had been not done. The [following tutorial](https://cloud.google.com/monitoring/agent/ops-agent/prometheus#oagent-config-json-exporter) details the needed configuration that needed to be done on the VM's startup script to enable this.
 
 # Contents
 
@@ -59,4 +59,4 @@ These can be configured via Pulumi.yamls for each stack
 * rag-solution:milvus_uri: Vector DB's url.
 
 # Secrets
-* **milvus_token_secret**: The project expect this secret to exists in secret manager. Without it it will fail.
+* **milvus_token_secret**: The project expect this secret to exists in Google Secret Manager. Without it it will fail.
