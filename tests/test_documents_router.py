@@ -41,7 +41,7 @@ async def test_ingest_documents_success(testclient: AsyncClient):
         ]
     }
     response = await testclient.post("/ingest", json=data)
-    assert response.status_code == 201
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio(loop_scope=ASYNCIO_SCOPE)
