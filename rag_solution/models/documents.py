@@ -3,17 +3,19 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+MAX_DOCUMENT_LENGTH = 4096
+
 class DocumentIngest(BaseModel):
     text: str = Field(..., description="Raw content of the document")
-    metadata: Optional[dict[str, str]] = Field(
+    metadata: Optional[dict[str, str | int | float]] = Field(
         {}, description="Optional metadata for the document"
     )
 
     @field_validator("text")
     @classmethod
     def text_max_length(cls, v):
-        if len(v) > 512:
-            raise ValueError("text must be at most 512 characters long")
+        if len(v) > MAX_DOCUMENT_LENGTH:
+            raise ValueError(f"text must be at most {MAX_DOCUMENT_LENGTH} characters long")
         return v
 
 

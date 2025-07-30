@@ -17,7 +17,7 @@ class DocumentIngest(BaseModel):
     """Schema for individual document to ingest."""
 
     text: str = Field(..., description="Raw content of the document")
-    metadata: Optional[Dict[str, str]] = Field(
+    metadata: Optional[Dict[str, object]] = Field(
         default_factory=dict, description="Optional metadata for the document"
     )
 

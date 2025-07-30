@@ -14,6 +14,7 @@ from pymilvus import (
 )
 
 from rag_solution.models.db import CreateDocument, ResultDocument, SearchResult
+from rag_solution.models.documents import MAX_DOCUMENT_LENGTH
 from rag_solution.settings import settings
 from rag_solution.singleton_worker_pool import encode_dense_parallel_executor
 
@@ -103,12 +104,12 @@ class MilvusDB:
             # We could use externally supplied IDs if idempotency is required.
             #   E.g.: (re-)ingesting changing documents like a Wiki.
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            # Set for all-mpnet-base-v2
+            # We don't really know how long the 384 tokens (max seq lengtrh for all-mpnet-base-v2) be.
+            # Let's overestimate max length to 4096 characters (average word length is 5-6 chars in English).
             FieldSchema(
                 name="text",
                 dtype=DataType.VARCHAR,
-                # BERT based models have max length of 512
-                max_length=512,
+                max_length=MAX_DOCUMENT_LENGTH,
                 enable_analyzer=True,
             ),
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
@@ -218,6 +219,12 @@ class MilvusDB:
         encode_results = await encode_dense_parallel_executor(
             documents=documents, type="Document"
         )
+
+        # Should test here if document["text"] token sequence length...
+        #  ...is less than embedding model's max length and raise error/warning.
+        #  For now we trust the ingestion pipeline to chunk documents properly.
+        #  Accuracy is getting penalty in those case as BERT models will truncate the text. 
+        #  I'm running out of time to implement this.  
 
         document_dense_embeddings = [
             {

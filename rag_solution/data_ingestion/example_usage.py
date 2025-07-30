@@ -18,18 +18,14 @@ from huggingface_hub import HfApi
 
 # Import the ingestion modules
 from ingest import (
-    ChunkingStrategy,
     DocumentIngestionPipeline,
     IngestionConfig,
 )
 from loguru import logger
-
+from model import ChunkingStrategy
 
 logger.remove()
-logger.add(
-    sys.stdout,
-    level="INFO"
-)
+logger.add(sys.stdout, level="INFO")
 
 
 async def example_basic_usage():
@@ -132,6 +128,7 @@ async def large_pdf_dataset_ingestion_from_HF(
     config = IngestionConfig(
         input_folder=str(extracted_dir),
         chunking_strategy=ChunkingStrategy.FIXED_SIZE,
+        chunk_size=None,
     )
 
     pipeline = DocumentIngestionPipeline(config)
@@ -152,15 +149,14 @@ async def main():
 
     ### Select example to run
     # Generate small text files and ingest them.
-    #await example_basic_usage()
+    # await example_basic_usage()
 
     # This download a large PDF dataset from Hugging Face and ingests it.
     # Full dataset is 1.5TB so be mindful of your disk space.
     # Also while there is internal batching of subtasks, all the chunks are collected in memory.
     #   Streaming can be implemented if larger-than-memory dataset processing is needed.
     await large_pdf_dataset_ingestion_from_HF(
-        extract_tar_count=1,
-        max_extracted_files=20
+        extract_tar_count=1, max_extracted_files=20
     )
 
     logger.info("\n" + "=" * 50)

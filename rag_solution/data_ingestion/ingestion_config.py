@@ -20,9 +20,10 @@ class IngestionConfig(BaseSettings):
     chunking_strategy: ChunkingStrategy = Field(
         default=ChunkingStrategy.FIXED_SIZE, description="Chunking strategy to use"
     )
-    # Default chunk size set for all-mpnet-base-v2
-    chunk_size: int = Field(
-        default=512, description="Size of chunks for fixed-size strategy"
+
+    chunk_size: int | None = Field(
+        default=None,
+        description="Size of chunks in tokens for fixed-size strategy. If None, uses embedding model's max sequence length.",
     )
     chunk_overlap: int = Field(default=50, description="Overlap between chunks")
 
