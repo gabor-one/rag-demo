@@ -17,3 +17,5 @@ raw_data
 extracted_files
 
 .DS_Store
+
+.coverage*

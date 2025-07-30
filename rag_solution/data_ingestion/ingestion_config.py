@@ -32,7 +32,7 @@ class IngestionConfig(BaseSettings):
         default="http://localhost:8000/ingest",
         description="API endpoint to send documents to",
     )
-    api_timeout: int = Field(default=30, description="API request timeout in seconds")
+    api_timeout: int = Field(default=60, description="API request timeout in seconds")
 
     # Concurrency configuration
     #   Rate limiter set to 4 by default.

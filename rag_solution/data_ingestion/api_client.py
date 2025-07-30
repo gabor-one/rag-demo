@@ -5,6 +5,7 @@ from rag_solution.data_ingestion.model import DocumentIngest, DocumentsIngestReq
 import aiohttp
 import asyncio
 
+
 class APIClient:
     """Handles API communication with retry logic."""
 
