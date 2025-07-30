@@ -109,7 +109,7 @@ class MilvusDB:
             FieldSchema(
                 name="text",
                 dtype=DataType.VARCHAR,
-                max_length=MAX_DOCUMENT_LENGTH,
+                max_length=MAX_DOCUMENT_LENGTH, 
                 enable_analyzer=True,
             ),
             FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),

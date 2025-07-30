@@ -1,7 +1,7 @@
 from loguru import logger
 from typing import List, Optional
 from ingestion_config import IngestionConfig
-from model import DocumentIngest, DocumentsIngestRequest
+from rag_solution.data_ingestion.model import DocumentIngest, DocumentsIngestRequest
 import aiohttp
 import asyncio
 

@@ -141,11 +141,19 @@ python example_usage.py
 - Splits text at sentence boundaries
 - Maintains semantic coherence within chunks
 - Better for natural language processing tasks
+- Truncates to max chunk size, thus it might lose some information
 
 ### Sliding Window (`sliding_window`)
 - Creates overlapping chunks with configurable step size
 - Preserves context across chunk boundaries
 - Useful for tasks requiring context preservation
+
+### Not implemented but the cutting edge approach
+#### Semantic distance
+- Tries to create chunks with maxiumum neighbour pair-wise distance
+- Theoretically it will create chunk which is consistent information content wise
+- Experimental
+- Ask me about this if you are interested
 
 ## Error Handling
 

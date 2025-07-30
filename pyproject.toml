@@ -50,3 +50,9 @@ testpaths = [
 pythonpath = [
   "."
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = ["rag_solution"]

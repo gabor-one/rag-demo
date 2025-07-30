@@ -2,8 +2,9 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-
-MAX_DOCUMENT_LENGTH = 4096
+# In case of sentence-trasformers, one token is one character...
+# Allow some extra space for tokenization artifacts, e.g.: unvisible characters that are not tokenized.
+MAX_DOCUMENT_LENGTH = 384 * 10
 
 class DocumentIngest(BaseModel):
     text: str = Field(..., description="Raw content of the document")
