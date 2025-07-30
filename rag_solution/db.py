@@ -96,6 +96,7 @@ class MilvusDB:
         logger.info(f"Disconnected from Milvus at {self.uri}")
 
     async def create_collection(self):
+        """Create a new collection with the specified schema and indexes."""
         if await self.try_load_collection():
             raise ValueError("Collection already exists.")
 
@@ -104,8 +105,8 @@ class MilvusDB:
             # We could use externally supplied IDs if idempotency is required.
             #   E.g.: (re-)ingesting changing documents like a Wiki.
             FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            # We don't really know how long the 384 tokens (max seq lengtrh for all-mpnet-base-v2) be.
-            # Let's overestimate max length to 4096 characters (average word length is 5-6 chars in English).
+            # Text field
+            # Let's overestimate. There could be hidden, non-tokenized characters in the text.
             FieldSchema(
                 name="text",
                 dtype=DataType.VARCHAR,
@@ -161,6 +162,17 @@ class MilvusDB:
         filter: str | None = None,
         limit: int = 10,
     ) -> list[SearchResult]:
+        """ Perform a hybrid search using both sparse and dense embeddings.
+        Args:
+            query (str): The search query.
+            sparse_weight (float): Weight for the sparse embedding results.
+            dense_weight (float): Weight for the dense embedding results.
+            similarity_threshold (float | None): Minimum similarity score to include results. Skip filtering if None.
+            filter (str | None): Optional filter expression to apply to the search. Skip if None.
+            limit (int): Maximum number of results to return.
+        Returns:
+            list[SearchResult]: List of search results containing text, primary key, and metadata.
+        """
         assert self.async_client is not None, "DB is not initialized."
 
         encode_results = await encode_dense_parallel_executor(
@@ -214,6 +226,12 @@ class MilvusDB:
         return results
 
     async def insert_documents(self, documents: list[CreateDocument]):
+        """Insert documents into the collection after encoding their dense embeddings.
+        Args:
+            documents (list[CreateDocument]): List of documents to insert.
+        Raises:
+            RuntimeError: If the async client is not initialized.
+        """
         assert self.async_client is not None, "DB is not initialized."
 
         encode_results = await encode_dense_parallel_executor(
@@ -241,6 +259,12 @@ class MilvusDB:
         )
 
     async def delete_document_by_id(self, doc_ids: list[int]):
+        """Delete documents from the collection by their primary key IDs.
+        Args:
+            doc_ids (list[int]): List of primary key IDs of documents to delete.
+        Raises:
+            RuntimeError: If the async client is not initialized.
+        """
         assert self.async_client is not None, "DB is not initialized."
         await self.async_client.delete(COLLECTION_NAME, ids=doc_ids)
         logger.info(
@@ -248,6 +272,12 @@ class MilvusDB:
         )
 
     async def list_all_documents(self) -> list[ResultDocument]:
+        """Retrieve all documents from the collection.
+        Returns:
+            list[ResultDocument]: List of documents with text, primary key, and metadata.
+        Raises:
+            RuntimeError: If the async client is not initialized.
+        """
         assert self.async_client is not None, "DB is not initialized."
         
         # Let's page the results to avoid memory issues with large collections
@@ -272,6 +302,11 @@ class MilvusDB:
         return results
 
     async def drop_all_documents(self):
+        """Drop the entire collection and recreate it.
+        This is useful for resetting the database state.
+        Raises:
+            ValueError: If the collection does not exist.
+        """
         assert self.async_client is not None, "DB is not initialized."
         if await self.try_load_collection():
             await self.async_client.drop_collection(COLLECTION_NAME)
@@ -284,7 +319,13 @@ class MilvusDB:
 
 
 # Dependency inject Milvus endpoints
+# This is basically MilvusDB client factory.
+# MilvusDB client is thread-safe.
+_db_instance: MilvusDB | None = None
+
 async def get_db():
-    db = MilvusDB(settings.MILVUSDB_URI)
-    await db.connect()
-    return db
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = MilvusDB(settings.MILVUSDB_URI)
+        await _db_instance.connect()
+    return _db_instance

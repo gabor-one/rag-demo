@@ -101,7 +101,7 @@ See "Configuration Options" chapter for all description.
 export INGEST_API_ENDPOINT="https://your-api.com/ingest"
 
 # Run the ingestion pipeline
-python ingest.py
+uv run rag_solution/data_ingestion/ingest.py
 ```
 
 ### Example Usage Script
@@ -109,7 +109,7 @@ python ingest.py
 Run the example script to see different configurations in action:
 
 ```bash
-python example_usage.py
+uv run rag_solution/data_ingestion/example_usage.py
 ```
 
 ## Configuration Options

@@ -84,9 +84,7 @@ After bringing up the server open `http://127.0.0.1:8000/docs` to access the Ope
 
 The project uses a multistage dockerfile to build the project then copy all the artifacts into a slim, build-resource-less container. Also it prefetches embedding model and saves it into the container image, which speeds up the container startup. 
 
-### Hacks and workarounds
-
-These things has been done due to lack of time or focus. I declare these here (and also in the codebase) for the sake of transparency and in hope that they will be not held against me.
+### Workarounds
 
 * Embedder model prefetch is a hack. It should be done properly without actually running the model.
 
@@ -105,6 +103,11 @@ Prometheus metrics (only the FastAPI default) and health endpoint has been expos
 Rate limit has been set to 4 CPS per IP. The data ingestion piepline uses 5 threads, for the sake of testing.
 
 Vector database is access via async client. With the async web server this external bottleneck is also eliminated.
+
+### Missing feature
+
+* Vector DB authentication has not been setup.
+* Idempotent ingestion capability: You cannot supply the ID on ingestion. It could be desirable to be able to upsert into vector DB in case of changing documents (e.g.: Wiki pages).
 
 ## Milvus Vector Database
 
