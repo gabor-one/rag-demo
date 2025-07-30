@@ -1,6 +1,6 @@
 from loguru import logger
 from typing import List, Optional
-from ingestion_config import IngestionConfig
+from rag_solution.data_ingestion.ingestion_config import IngestionConfig
 from rag_solution.data_ingestion.model import DocumentIngest, DocumentsIngestRequest
 import aiohttp
 import asyncio
@@ -26,6 +26,10 @@ class APIClient:
         """Send documents to the API endpoint with retry logic."""
         if not self.session:
             raise RuntimeError("APIClient not properly initialized")
+        
+        if not documents:
+            logger.warning("No documents to send. Skipping API call.")
+            return True
 
         request_data = DocumentsIngestRequest(documents=documents)
 

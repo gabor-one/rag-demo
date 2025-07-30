@@ -1,9 +1,10 @@
 .pytest_cache
 .venv
 .vscode
-data
+**/data
 notebooks
 tests
 .env
 raw_data
 data-ingestion
+**/__pycache__

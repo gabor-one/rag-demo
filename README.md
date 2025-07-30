@@ -118,11 +118,9 @@ NOTE: Even the Docker-Compose example is not a production grade deployment of Mi
 
 Tests are using `pytest-asyncio` and implemented as async tests. 
 
-Unit test are using in-memory vector db.
+Unit test are using in-memory vector db. AI was heavily used to generate some of these files.
 
 Integration tests (API level) are using `Testcontainers` to spin up a Milvus DB instance to do the tests.
-
-Webservice is covered with unit test, while the data pipeline coverage is not total. I hope the written tests serves as proof of skills.
 
 ## Data ingestion piepline
 

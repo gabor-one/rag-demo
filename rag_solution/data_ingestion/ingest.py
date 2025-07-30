@@ -9,12 +9,12 @@ import asyncio
 from pathlib import Path
 from typing import List
 
-from api_client import APIClient
-from document_chunker import DocumentChunker
-from document_processor import DocumentProcessor
-from ingestion_config import IngestionConfig
+from rag_solution.data_ingestion.api_client import APIClient
+from rag_solution.data_ingestion.document_chunker import DocumentChunker
+from rag_solution.data_ingestion.document_processor import DocumentProcessor
+from rag_solution.data_ingestion.ingestion_config import IngestionConfig
 from loguru import logger
-from model import (
+from rag_solution.data_ingestion.model import (
     DocumentIngest,
 )
 from tqdm.asyncio import tqdm

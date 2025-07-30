@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from loguru import logger
+
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -9,9 +9,11 @@ from docling.document_converter import (
     PdfFormatOption,
     _get_default_option,
 )
+from loguru import logger
 from tqdm import tqdm as sync_tqdm
 
-from model import DocumentIngest
+from rag_solution.data_ingestion.model import DocumentIngest
+
 
 class DocumentProcessor:
     """Handles document processing using docling."""

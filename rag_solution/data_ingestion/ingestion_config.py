@@ -1,6 +1,6 @@
 from typing import List
 
-from model import ChunkingStrategy
+from rag_solution.data_ingestion.model import ChunkingStrategy
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
